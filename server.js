@@ -1,31 +1,57 @@
 // server.js
-const express = require('express');
-const path = require('path');
-const cors = require('cors'); // 1. Импортируй CORS
-require('dotenv').config();
+import express        from 'express';
+import path           from 'path';
+import cors           from 'cors';
+import helmet         from 'helmet';
+import rateLimit      from 'express-rate-limit';
+import morgan         from 'morgan';
+import dotenv         from 'dotenv';
 
-const analyzeRoute = require('./routes/analyze');
+dotenv.config();
 
-const app = express();
+import analyzeRoute   from './routes/analyze.js';
 
-// 2. Подключи CORS (лучше явно указать домен, но для тестов можно '*')
-app.use(cors({
-  origin: '*', // Лучше заменить на твой фронтовый домен в проде!
-  methods: ["GET", "POST"],
-}));
+const app   = express();
+const __dir = path.resolve();
 
-// Статические файлы из public
+// ──────────────────────────────────────────────
+// 1)  HTTP-заголовки «по умолчанию безопасные»
+app.use(helmet());
+
+// 2)  Логи запросов  (потом пригодится для статистики)
+app.use(morgan('combined'));
+
+// 3)  CORS: в .env задаём допустимые origin-ы
+app.use(
+  cors({
+    origin: process.env.ALLOWED_ORIGINS?.split(',') ?? '*',
+    methods: ['GET', 'POST'],
+  })
+);
+
+// 4)  Rate-limit — 30 запросов с одного IP за 15 минут
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
+
+// 5)  Статика
 app.use(express.static('public'));
 
-// Роут для анализа ладони
+// 6)  API-роут
 app.use('/analyze', analyzeRoute);
 
-// Корневая страница (форма)
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// 7)  Fallback на index.html
+app.get('/', (_req, res) =>
+  res.sendFile(path.join(__dir, 'public', 'index.html'))
+);
 
+// ──────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>
-  console.log(`🔮 Хиромантия онлайн на http://localhost:${PORT}`)
+  console.log(`🔮  Backend online  →  http://localhost:${PORT}`)
 );
